@@ -46,7 +46,7 @@ import Data.Profunctor.Product (ProductProfunctor, p1, p2, p3, p4, p5, p6, p7,
                                 p18, p19, p20, p21, p22, p23, p24)
 import Data.Profunctor.Product.Default (Default, def)
 import Language.Haskell.TH (Dec(DataD, SigD, FunD, InstanceD),
-                            mkName, TyVarBndr(PlainTV, KindedTV),
+                            mkName, nameBase, TyVarBndr(PlainTV, KindedTV),
                             Con(RecC, NormalC),
                             Strict(NotStrict), Clause(Clause),
                             Type(VarT, ForallT, AppT, ArrowT, ConT),
@@ -58,21 +58,28 @@ import Control.Monad ((<=<))
 import Control.Applicative ((<$>), (<*>))
 import Control.Arrow (second)
 
+makeAdaptorAndInstance' :: Name -> Q [Dec]
+makeAdaptorAndInstance' = makeAdaptorAndInstanceI Nothing
+
 makeAdaptorAndInstance :: String -> Name -> Q [Dec]
-makeAdaptorAndInstance adaptorNameS = returnOrFail <=< r makeAandIE <=< reify
+makeAdaptorAndInstance adaptorNameS = makeAdaptorAndInstanceI (Just adaptorNameS)
+
+makeAdaptorAndInstanceI :: Maybe String -> Name -> Q [Dec]
+makeAdaptorAndInstanceI adaptorNameM = returnOrFail <=< r makeAandIE <=< reify
   where r = (return .)
         returnOrFail (Right decs) = decs
         returnOrFail (Left errMsg) = fail errMsg
-        makeAandIE = makeAdaptorAndInstanceE adaptorNameS
+        makeAandIE = makeAdaptorAndInstanceE adaptorNameM
 
 type Error = String
 
-makeAdaptorAndInstanceE :: String -> Info -> Either Error (Q [Dec])
-makeAdaptorAndInstanceE adaptorNameS info = do
+makeAdaptorAndInstanceE :: Maybe String -> Info -> Either Error (Q [Dec])
+makeAdaptorAndInstanceE adaptorNameM info = do
   (tyName, tyVars, conName, conTys) <- dataDecStuffOfInfo info
   let numTyVars = length tyVars
       numConTys = length conTys
-      adaptorNameN = mkName adaptorNameS
+      defaultAdaptorName = (mkName . ("p" ++) . nameBase) conName
+      adaptorNameN = maybe defaultAdaptorName mkName adaptorNameM
       adaptorSig' = adaptorSig tyName numTyVars adaptorNameN
       adaptorDefinition' = adaptorDefinition numTyVars conName adaptorNameN
       instanceDefinition' = instanceDefinition tyName numTyVars numConTys
